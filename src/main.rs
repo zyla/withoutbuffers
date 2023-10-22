@@ -443,9 +443,9 @@ impl Socket for MockSocket {
     }
 
     fn transmit<R>(&mut self, f: impl FnOnce(&mut [u8]) -> (usize, R)) -> Option<R> {
-        let mut buf = [0; 100];
+        let mut buf = [0; 64];
         let (sent, r) = f(&mut buf);
-        println!("{}", std::str::from_utf8(&buf[..sent]).unwrap());
+        println!("{}", String::from_utf8_lossy(&buf[..sent]));
         Some(r)
     }
 }
@@ -455,11 +455,19 @@ fn main() {
 
     let mut map = HashMap::new();
     map.insert(b"foo".to_vec(), Entry::new(b"bar".to_vec()));
+    map.insert(b"bar".to_vec(), Entry::new([b'a'; 200].to_vec()));
     let mut handler = CommandHandler::new(map);
 
     let mut s = MockSocket::new();
 
     s.rbuf.extend(b"get foo\n");
+    while handler.poll(&mut s) {}
+
+    s.rbuf.extend(b"get bar\n");
+    while handler.poll(&mut s) {}
+
+    // Pipelining - doesn't work
+    s.rbuf.extend(b"get foo\nget bar\n");
     while handler.poll(&mut s) {}
 
     s.rbuf.extend(b"ge");
